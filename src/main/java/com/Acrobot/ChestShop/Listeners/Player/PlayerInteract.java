@@ -75,63 +75,66 @@ public class PlayerInteract implements Listener {
             return;
         }
 
-        boolean canAccess = ChestShopSign.canAccess(player, sign);
+        System.out.println("asyncCanAccess before thread switch");
+        ChestShopSign.asyncCanAccess(player, sign).thenAccept(canAccess -> {
+            Bukkit.getScheduler().runTask(com.Acrobot.ChestShop.ChestShop.getPlugin(), () -> {
+                if (Properties.ALLOW_AUTO_ITEM_FILL && ChatColor.stripColor(sign.getLine(ITEM_LINE)).equals(AUTOFILL_CODE)) {
+                    if (canAccess) {
+                        ItemStack item = player.getInventory().getItemInMainHand();
+                        if (!MaterialUtil.isEmpty(item)) {
+                            String itemCode = MaterialUtil.getSignName(item);
+                            String[] lines = sign.getLines();
+                            lines[ITEM_LINE] = itemCode;
 
-        if (Properties.ALLOW_AUTO_ITEM_FILL && ChatColor.stripColor(sign.getLine(ITEM_LINE)).equals(AUTOFILL_CODE)) {
-            if (canAccess) {
-                ItemStack item = player.getInventory().getItemInMainHand();
-                if (!MaterialUtil.isEmpty(item)) {
-                    String itemCode = MaterialUtil.getSignName(item);
-                    String[] lines = sign.getLines();
-                    lines[ITEM_LINE] = itemCode;
-
-                    SignChangeEvent changeEvent = new SignChangeEvent(block, player, lines);
-                    com.Acrobot.ChestShop.ChestShop.callEvent(changeEvent);
-                    if (!changeEvent.isCancelled()) {
-                        for (byte i = 0; i < changeEvent.getLines().length; ++i) {
-                            sign.setLine(i, changeEvent.getLine(i));
+                            SignChangeEvent changeEvent = new SignChangeEvent(block, player, lines);
+                            com.Acrobot.ChestShop.ChestShop.callEvent(changeEvent);
+                            if (!changeEvent.isCancelled()) {
+                                for (byte i = 0; i < changeEvent.getLines().length; ++i) {
+                                    sign.setLine(i, changeEvent.getLine(i));
+                                }
+                                sign.update();
+                            }
+                        } else {
+                            player.sendMessage(Messages.prefix(Messages.NO_ITEM_IN_HAND));
                         }
-                        sign.update();
+                    } else {
+                        player.sendMessage(Messages.prefix(Messages.ACCESS_DENIED));
                     }
-                } else {
-                    player.sendMessage(Messages.prefix(Messages.NO_ITEM_IN_HAND));
+                    return;
                 }
-            } else {
-                player.sendMessage(Messages.prefix(Messages.ACCESS_DENIED));
-            }
-            return;
-        }
 
-        if (canAccess && !ChestShopSign.isAdminShop(sign)) {
-            if (!Properties.ALLOW_SIGN_CHEST_OPEN
-                    || player.isSneaking() || player.isInsideVehicle()
-                    || (Properties.IGNORE_CREATIVE_MODE && player.getGameMode() == GameMode.CREATIVE)) {
-                return;
-            }
+                if (canAccess && !ChestShopSign.isAdminShop(sign)) {
+                    if (!Properties.ALLOW_SIGN_CHEST_OPEN
+                            || player.isSneaking() || player.isInsideVehicle()
+                            || (Properties.IGNORE_CREATIVE_MODE && player.getGameMode() == GameMode.CREATIVE)) {
+                        return;
+                    }
 
-            if (!Properties.ALLOW_LEFT_CLICK_DESTROYING || action != LEFT_CLICK_BLOCK) {
-                event.setCancelled(true);
-                showChestGUI(player, block);
-            }
+                    if (!Properties.ALLOW_LEFT_CLICK_DESTROYING || action != LEFT_CLICK_BLOCK) {
+                        event.setCancelled(true);
+                        showChestGUI(player, block);
+                    }
 
-            return;
-        }
+                    return;
+                }
 
-        if (action == RIGHT_CLICK_BLOCK) {
-            event.setCancelled(true);
-        }
+                if (action == RIGHT_CLICK_BLOCK) {
+                    event.setCancelled(true);
+                }
 
-        //Bukkit.getLogger().info("ChestShop - DEBUG - "+block.getWorld().getName()+": "+block.getLocation().getBlockX()+", "+block.getLocation().getBlockY()+", "+block.getLocation().getBlockZ());
-        PreTransactionEvent pEvent = preparePreTransactionEvent(sign, player, action);
-        if (pEvent == null)
-            return;
+                //Bukkit.getLogger().info("ChestShop - DEBUG - "+block.getWorld().getName()+": "+block.getLocation().getBlockX()+", "+block.getLocation().getBlockY()+", "+block.getLocation().getBlockZ());
+                PreTransactionEvent pEvent = preparePreTransactionEvent(sign, player, action);
+                if (pEvent == null)
+                    return;
 
-        Bukkit.getPluginManager().callEvent(pEvent);
-        if (pEvent.isCancelled())
-            return;
+                Bukkit.getPluginManager().callEvent(pEvent);
+                if (pEvent.isCancelled())
+                    return;
 
-        TransactionEvent tEvent = new TransactionEvent(pEvent, sign);
-        Bukkit.getPluginManager().callEvent(tEvent);
+                TransactionEvent tEvent = new TransactionEvent(pEvent, sign);
+                Bukkit.getPluginManager().callEvent(tEvent);
+            });
+        });
     }
 
     private static PreTransactionEvent preparePreTransactionEvent(Sign sign, Player player, Action action) {
@@ -166,6 +169,7 @@ public class PlayerInteract implements Listener {
 
         ItemStack item = MaterialUtil.getItem(material);
         if (item == null || !NumberUtil.isInteger(quantity)) {
+            System.out.println("INVALID_SHOP_DETECTED");
             player.sendMessage(Messages.prefix(Messages.INVALID_SHOP_DETECTED));
             return null;
         }

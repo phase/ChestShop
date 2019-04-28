@@ -1,10 +1,13 @@
 package com.Acrobot.ChestShop.Signs;
 
 import com.Acrobot.Breeze.Utils.BlockUtil;
+import com.Acrobot.ChestShop.ChestShop;
 import com.Acrobot.ChestShop.Configuration.Messages;
 import com.Acrobot.ChestShop.Events.PreTransactionEvent;
 import com.Acrobot.ChestShop.Permission;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
@@ -14,6 +17,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.SignChangeEvent;
+
+import java.util.concurrent.CompletableFuture;
 
 import static com.Acrobot.ChestShop.Events.PreTransactionEvent.TransactionOutcome.SHOP_IS_RESTRICTED;
 import static com.Acrobot.ChestShop.Permission.ADMIN;
@@ -27,15 +32,24 @@ public class RestrictedSign implements Listener {
     @EventHandler(ignoreCancelled = true)
     public static void onBlockDestroy(BlockBreakEvent event) {
         Block destroyed = event.getBlock();
+        Material oldType = destroyed.getType();
         Sign attachedRestrictedSign = getRestrictedSign(destroyed.getLocation());
 
         if (attachedRestrictedSign == null) {
             return;
         }
 
-        if (!canDestroy(event.getPlayer(), attachedRestrictedSign)) {
-            event.setCancelled(true);
-        }
+        asyncCanDestroy(event.getPlayer(), attachedRestrictedSign).thenAccept(canDestroy -> {
+            if (!canDestroy) {
+                Bukkit.getScheduler().runTaskLater(ChestShop.getPlugin(), () -> {
+                    destroyed.setType(oldType);
+                    Sign signState = (Sign) destroyed.getState();
+                    for (int i = 0; i < 4; i++) {
+                        signState.setLine(i, attachedRestrictedSign.getLine(i));
+                    }
+                }, 1);
+            }
+        });
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -58,11 +72,15 @@ public class RestrictedSign implements Listener {
 
             Sign sign = (Sign) connectedSign.getState();
 
-            if (!ChestShopSign.canAccess(player, sign)) {
-                dropSignAndCancelEvent(event);
-            }
-
-            player.sendMessage(Messages.prefix(Messages.RESTRICTED_SIGN_CREATED));
+            System.out.println("RestrictedSign#onSignChange: asyncCanAccess");
+            ChestShopSign.asyncCanAccess(player, sign).thenAccept(canAccess -> {
+                Bukkit.getScheduler().runTask(ChestShop.getPlugin(), () -> {
+                    if (!canAccess) {
+                        dropSignAndCancelEvent(event);
+                    }
+                    player.sendMessage(Messages.prefix(Messages.RESTRICTED_SIGN_CREATED));
+                });
+            });
         }
     }
 
@@ -139,6 +157,15 @@ public class RestrictedSign implements Listener {
 
         Sign shopSign = getAssociatedSign(sign);
         return ChestShopSign.canAccess(player, shopSign);
+    }
+
+    public static CompletableFuture<Boolean> asyncCanDestroy(Player player, Sign sign) {
+        if (Permission.has(player, ADMIN)) {
+            return CompletableFuture.completedFuture(true);
+        }
+
+        Sign shopSign = getAssociatedSign(sign);
+        return ChestShopSign.asyncCanAccess(player, shopSign);
     }
 
     public static Sign getAssociatedSign(Sign restricted) {

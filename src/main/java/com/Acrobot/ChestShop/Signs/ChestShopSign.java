@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 
 /**
@@ -88,6 +89,15 @@ public class ChestShopSign {
         if (name == null || name.isEmpty()) return true;
 
         return NameManager.canUseName(player, name);
+    }
+
+    public static CompletableFuture<Boolean> asyncCanAccess(Player player, Sign sign) {
+        if (player == null) return CompletableFuture.completedFuture(false);
+        if (sign == null) return CompletableFuture.completedFuture(true);
+
+        String name = sign.getLine(NAME_LINE);
+        if (name == null || name.isEmpty()) return CompletableFuture.completedFuture(true);
+        return NameManager.asyncCanUseName(player, name);
     }
 
     public static boolean isValidPreparedSign(String[] lines) {

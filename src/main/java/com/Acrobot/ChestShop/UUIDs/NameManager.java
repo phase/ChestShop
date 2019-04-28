@@ -1,8 +1,8 @@
 package com.Acrobot.ChestShop.UUIDs;
 
+import com.Acrobot.Breeze.Collection.SimpleCache;
 import com.Acrobot.Breeze.Utils.Encoding.Base62;
 import com.Acrobot.Breeze.Utils.NameUtil;
-import com.Acrobot.Breeze.Collection.SimpleCache;
 import com.Acrobot.ChestShop.ChestShop;
 import com.Acrobot.ChestShop.Configuration.Properties;
 import com.Acrobot.ChestShop.Database.Account;
@@ -10,7 +10,6 @@ import com.Acrobot.ChestShop.Database.DaoCreator;
 import com.Acrobot.ChestShop.Permission;
 import com.Acrobot.ChestShop.Signs.ChestShopSign;
 import com.j256.ormlite.dao.Dao;
-
 import org.apache.commons.lang.Validate;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -19,6 +18,7 @@ import org.bukkit.entity.Player;
 import java.sql.SQLException;
 import java.util.Date;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 
@@ -307,6 +307,13 @@ public class NameManager {
         Account account = getAccountFromShortName(name, false);
         return account != null && (account.getUuid().equals(player.getUniqueId())
                 || (!account.getName().equalsIgnoreCase(name) && Permission.otherName(player, account.getName())));
+    }
+
+    /**
+     * @author phase
+     */
+    public static CompletableFuture<Boolean> asyncCanUseName(Player player, String name) {
+        return CompletableFuture.supplyAsync(() -> canUseName(player, name));
     }
 
     public static boolean isAdminShop(UUID uuid) {
